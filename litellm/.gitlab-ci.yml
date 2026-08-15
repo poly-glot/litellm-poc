@@ -1,0 +1,23 @@
+stages:
+  - test
+
+.litellm-image:
+  image:
+    name: ghcr.io/berriai/litellm-database:v1.96.2
+    entrypoint: ['']
+  variables:
+    PYTHONDONTWRITEBYTECODE: '1'
+  before_script:
+    - python -m ensurepip --upgrade
+    - python -m pip install --quiet -r litellm/tests/requirements.txt
+
+hooks:unit-and-seams:
+  extends: .litellm-image
+  stage: test
+  script:
+    - python -m pytest litellm/tests -q -m 'not integration'
+
+# Layer C (black-box matrix) needs a booted stack: this image as the gateway with
+# /etc/litellm mounted, plus the platform services (Discovery, Access, Identity, Acme
+# MCP). Run it manually with `make up && make test-integration`, or directly:
+#   GATEWAY_URL=http://litellm:4000 python -m pytest litellm/tests -q -m integration

@@ -1,0 +1,84 @@
+services:
+  dev:
+    build:
+      context: ..
+      dockerfile: .devcontainer/Dockerfile
+    command: sleep infinity
+    environment:
+      CLAUDE_CONFIG_DIR: /home/node/.claude
+      GATEWAY_URL: http://litellm:4000
+      LITELLM_MASTER_KEY: sk-litellm-dev
+    init: true
+    ports:
+      - 127.0.0.1:3100:3100
+      - 127.0.0.1:3200:3200
+      - 127.0.0.1:4000:4000
+      - 127.0.0.1:4004:4004
+      - 127.0.0.1:4008:4008
+      - 127.0.0.1:4014:4014
+      - 127.0.0.1:4018:4018
+      - 127.0.0.1:4022:4022
+    volumes:
+      - ..:${WORKSPACE_PATH:?the workspace mounts at its host path; run make from the repo root, which exports it}
+      - ~/.claude:/home/node/.claude
+      - /var/run/docker.sock:/var/run/docker.sock
+
+  litellm:
+    command: ['--config', '/etc/litellm/config.yaml', '--port', '4000']
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      ACCESS_API_TEMPLATE: ${ACCESS_API_TEMPLATE:-http://dev:4014}
+      DATABASE_URL: postgresql://litellm:litellm@postgres:5432/litellm
+      DISCOVERY_API_URL: ${DISCOVERY_API_URL:-http://dev:4008}
+      LITELLM_MASTER_KEY: sk-litellm-dev
+      LITELLM_SALT_KEY: sk-litellm-salt
+      OAUTH_ISSUER_TEMPLATE: ${OAUTH_ISSUER_TEMPLATE:-http://localhost:4018/eu/realms/acme,http://localhost:4018/us/realms/acme}
+      REDIS_HOST: redis
+      REDIS_PORT: '6379'
+    image: ghcr.io/berriai/litellm-database:v1.96.2
+    ports:
+      - 127.0.0.1:4010:4000
+    volumes:
+      - ../litellm:/etc/litellm
+
+  ollama:
+    healthcheck:
+      interval: 5s
+      retries: 12
+      test: ['CMD', 'ollama', 'ls']
+      timeout: 3s
+    image: ollama/ollama:0.15.4
+    volumes:
+      - ollama:/root/.ollama
+
+  postgres:
+    environment:
+      POSTGRES_DB: litellm
+      POSTGRES_PASSWORD: litellm
+      POSTGRES_USER: litellm
+    healthcheck:
+      interval: 5s
+      retries: 12
+      test: ['CMD-SHELL', 'pg_isready -U litellm -d litellm']
+      timeout: 3s
+    image: postgres:16-alpine
+    ports:
+      - 127.0.0.1:5433:5432
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+
+  redis:
+    healthcheck:
+      interval: 5s
+      retries: 12
+      test: ['CMD', 'redis-cli', 'ping']
+      timeout: 3s
+    image: redis:7-alpine
+
+volumes:
+  ollama:
+  pgdata:

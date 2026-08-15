@@ -1,0 +1,63 @@
+%%{init: {'theme': 'base', 'look': 'classic', 'flowchart': {'defaultRenderer': 'elk', 'curve': 'linear', 'padding': 20, 'nodeSpacing': 60, 'rankSpacing': 80}, 'elk': {'mergeEdges': true, 'nodePlacementStrategy': 'NETWORK_SIMPLEX'}, 'themeVariables': {'primaryColor': '#ffffff', 'primaryTextColor': '#000000', 'primaryBorderColor': '#000000', 'lineColor': '#000000', 'secondaryColor': '#f5f5f5', 'tertiaryColor': '#ffffff', 'fontFamily': 'Arial', 'fontSize': '14px'}, 'themeCSS': '.edgePath .path { stroke-width: 2px !important; } .flowchart-link { stroke-width: 2px !important; }'}}%%
+
+flowchart LR
+    Browser["Main App User\nbrowser · localhost:4000"]
+    ExtMCP["External MCP Client\nClaude Code · mcp-remote"]
+    Agent["Internal Agent Platform\nLiteLLM virtual key"]
+    JWTC["Tenant API Client\nIDP token or RPT"]
+
+    FE["Main App Frontend\nNode 22 · dev:4000"]
+    BFF["Main App Backend\nBFF · dev:4004"]
+
+    GW["LiteLLM Gateway\nv1.96.2 · litellm:4000\nguardrails · budget gate"]
+
+    subgraph AUTH ["Tenant discovery + auth routing"]
+        DISC["Tenant Discovery\nregion lookup · dev:4008"]
+        IDP["Identity Server\nOIDC + PKCE · dev:4018 /eu /us"]
+        ACC["Access API\nIDP token → RPT · dev:4014"]
+    end
+
+    subgraph UP ["MCP upstreams"]
+        ACME["Acme Service\nREST + MCP · dev:4022"]
+        MOCK["Mock MCP Servers\nbci + search · dev:3100/3200"]
+    end
+
+    OLL["Ollama\nqwen3:1.7b · ollama:11434"]
+    PG["Postgres\ntenant spend + budgets · postgres:5432"]
+    RD["Redis\ncompletion cache · redis:6379"]
+
+    Browser -->|"visits /tenant-a"| FE
+    FE -->|"1 region · 2 login · 3 RPT"| DISC
+    FE -->|"4 chat"| BFF
+    BFF -->|"tagged completion"| GW
+
+    ExtMCP -->|"MCP + OAuth"| GW
+    Agent -->|"virtual key"| GW
+    JWTC -->|"JWT completion"| GW
+
+    GW -->|"OAuth relay"| IDP
+    GW -->|"region"| DISC
+    GW -->|"RPT exchange · JWKS"| ACC
+    GW -->|"tools/call + RPT"| ACME
+    GW -->|"pass-through"| MOCK
+    GW -->|"completions"| OLL
+    GW -->|"spend · budgets"| PG
+    GW -->|"cache"| RD
+
+    style Browser fill:#fff,stroke:#000,stroke-width:2px,color:#000
+    style ExtMCP fill:#fff,stroke:#000,stroke-width:2px,color:#000
+    style Agent fill:#fff,stroke:#000,stroke-width:2px,color:#000
+    style JWTC fill:#fff,stroke:#000,stroke-width:2px,color:#000
+    style FE fill:#fff,stroke:#000,stroke-width:2px,color:#000
+    style BFF fill:#fff,stroke:#000,stroke-width:2px,color:#000
+    style GW fill:#fff,stroke:#000,stroke-width:3px,color:#000
+    style DISC fill:#fff,stroke:#000,stroke-width:2px,color:#000
+    style IDP fill:#fff,stroke:#000,stroke-width:2px,color:#000
+    style ACC fill:#fff,stroke:#000,stroke-width:2px,color:#000
+    style ACME fill:#fff,stroke:#000,stroke-width:2px,color:#000
+    style MOCK fill:#f5f5f5,stroke:#000,stroke-width:2px,color:#000
+    style OLL fill:#f5f5f5,stroke:#000,stroke-width:2px,color:#000
+    style PG fill:#f5f5f5,stroke:#000,stroke-width:2px,color:#000
+    style RD fill:#f5f5f5,stroke:#000,stroke-width:2px,color:#000
+    style AUTH fill:#ffffff,stroke:#000,stroke-width:1px,color:#000
+    style UP fill:#ffffff,stroke:#000,stroke-width:1px,color:#000

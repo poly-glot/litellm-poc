@@ -1,0 +1,11 @@
+__pycache__/
+*.log
+.claude/settings.local.json
+.devcontainer/.env
+.DS_Store
+*.tsbuildinfo
+.idea/
+.pnpm-store/
+coverage/
+dist/
+node_modules/

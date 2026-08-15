@@ -1,0 +1,9 @@
+{
+  "dockerComposeFile": "docker-compose.yml",
+  "name": "litellm-poc",
+  "postCreateCommand": "bash .devcontainer/post-create.sh",
+  "remoteUser": "node",
+  "runServices": ["dev", "litellm", "ollama", "postgres", "redis"],
+  "service": "dev",
+  "workspaceFolder": "${localWorkspaceFolder}"
+}

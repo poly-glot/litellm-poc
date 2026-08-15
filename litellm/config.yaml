@@ -1,0 +1,94 @@
+model_list:
+  - model_name: qwen3-local
+    litellm_params:
+      api_base: http://ollama:11434/v1
+      api_key: fake-key
+      input_cost_per_token: 0.00001
+      model: openai/qwen3:1.7b
+      output_cost_per_token: 0.00003
+
+litellm_settings:
+  drop_params: true
+  callbacks: custom_hooks.TagValidationHook
+  default_key_generate_params:
+    max_budget: 5.0
+  max_end_user_budget_id: acme-tenant-default
+  cache: true
+  cache_params:
+    type: redis
+    namespace: acme-litellm
+    ttl: 300
+    supported_call_types: ['acompletion', 'atext_completion']
+
+general_settings:
+  custom_auth: acme_custom_auth.acme_jwt_or_key_auth
+  master_key: os.environ/LITELLM_MASTER_KEY
+  store_model_in_db: true
+  store_prompts_in_spend_logs: true
+
+# The os.environ/ references below resolve against the CONTAINER environment, eagerly at
+# config read (get_config -> _check_for_os_environ_vars), before a config-level
+# environment_variables block would be applied — so such a block cannot feed them, and
+# changing these values requires recreating the litellm container with the new compose
+# environment (docker restart is NOT enough; it keeps the env baked at creation).
+
+mcp_servers:
+  bci:
+    url: http://dev:3100/mcp/bci
+    transport: http
+    description: Mock brand-intelligence MCP server (in-memory dataset).
+  search_mcp:
+    url: http://dev:3200/mcp
+    transport: http
+    description: Web search MCP server (LangSearch API).
+  acme_mcp:
+    description: Acme MCP server. Briefing-agent uses to create a project.
+    transport: http
+    url: http://dev:4022/mcp
+  tenant_a:
+    auth_type: oauth2
+    # authorization_url is browser-facing (the user's machine reaches Identity on
+    # localhost:4018); token_url is fetched server-side by the litellm container, which
+    # reaches Identity through the dev service. A pinned `issuer` would discard both and
+    # fail closed on RFC 8414 discovery (the doc's self-attested issuer is the localhost
+    # form), so the endpoints are pinned manually instead.
+    authorization_url: http://localhost:4018/eu/oidc/authorize
+    client_id: poc
+    delegate_auth_to_upstream: true
+    description: Acme MCP for tenant-a (path-based tenant; direct external MCP clients, no LiteLLM key). The acme-mcp-rpt guardrail reads the tenant from the server name and exchanges the user's IDP token for a tenant-scoped RPT.
+    oauth2_flow: authorization_code
+    static_headers:
+      x-tenant-id: tenant-a
+    token_url: http://dev:4018/eu/oidc/token
+    transport: http
+    url: http://dev:4022/mcp
+  # tenant_b intentionally NOT registered — served by the mint-on-miss tenant
+  # resolver (acme_mcp_tenant_resolver.py) cloning the tenant_a template.
+
+guardrails:
+  - guardrail_name: acme-mcp-tenant-resolver
+    litellm_params:
+      client_discovery_api: os.environ/DISCOVERY_API_URL
+      default_on: false
+      guardrail: acme_mcp_tenant_resolver.AcmeMcpTenantResolver
+      max_minted: 512
+      mode: pre_mcp_call
+      template_server: tenant_a
+  - guardrail_name: acme-mcp-rpt
+    litellm_params:
+      access_api_template: os.environ/ACCESS_API_TEMPLATE
+      client_discovery_api: os.environ/DISCOVERY_API_URL
+      default_mcp_rpm_limit: 60
+      default_on: true
+      guardrail: acme_mcp_rpt_hook.AcmeMcpRptHook
+      mode: pre_mcp_call
+      oauth_issuer_template: os.environ/OAUTH_ISSUER_TEMPLATE
+      realm: acme
+  - guardrail_name: acme-tenant-default-budget
+    litellm_params:
+      budget_id: acme-tenant-default
+      default_on: false
+      guardrail: acme_tenant_budget_seed.AcmeTenantBudgetSeed
+      max_budget: 25.0
+      mode: pre_mcp_call
+      rpm_limit: 60
